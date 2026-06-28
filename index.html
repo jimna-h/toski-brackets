@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Commander Playgroup Power Tracker</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/tabler-icons.min.css" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f4f0; color: #1a1a18; min-height: 100vh; }
+  .app { max-width: 900px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 0.25rem; }
+  .subtitle { font-size: 14px; color: #666; margin-bottom: 1.5rem; }
+  .section-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #888; margin-bottom: 0.6rem; }
+  .card { background: #fff; border: 0.5px solid rgba(0,0,0,0.12); border-radius: 12px; padding: 1.1rem 1.25rem; margin-bottom: 1.5rem; }
+
+  .status-bar { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #888; margin-bottom: 1.25rem; padding: 10px 14px; background: #fff; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 8px; }
+  .status-bar.error { color: #a32d2d; background: #fcebeb; border-color: rgba(163,45,45,0.25); }
+  .status-bar.ok { color: #3b6d11; background: #eaf3de; border-color: rgba(59,109,17,0.25); }
+  .spinner { width: 14px; height: 14px; border: 2px solid rgba(0,0,0,0.15); border-top-color: #555; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  button {
+    height: 36px; padding: 0 16px; border: 0.5px solid rgba(0,0,0,0.18); border-radius: 8px;
+    font-size: 14px; font-family: inherit; background: transparent; color: #1a1a18; cursor: pointer;
+  }
+  button:hover { background: #f0eeee; }
+  button:active { transform: scale(0.98); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .btn-refresh { display: flex; align-items: center; gap: 6px; }
+
+  input[type="range"] { width: 100%; accent-color: #7F77DD; }
+  select {
+    height: 30px; padding: 0 8px; border: 0.5px solid rgba(0,0,0,0.18); border-radius: 6px;
+    font-size: 13px; font-family: inherit; background: #fff; color: #1a1a18;
+  }
+
+  /* Chart */
+  .bracket-header { display: flex; margin-left: 64px; margin-bottom: 3px; }
+  .b-head { flex: 1; text-align: center; font-size: 11px; color: #888; font-weight: 500; }
+  .chart-row { display: flex; }
+  .y-col { width: 64px; position: relative; padding-right: 8px; }
+  .y-lbl { font-size: 11px; color: #888; text-align: right; line-height: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; position: absolute; right: 8px; transform: translateY(-50%); max-width: 60px; }
+  .plot { flex: 1; position: relative; background: #faf9f6; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 8px; overflow: visible; }
+  .banded { display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 8px; overflow: hidden; }
+  .b-stripe { flex: 1; border-right: 1px dashed rgba(0,0,0,0.08); }
+  .b-stripe:last-child { border-right: none; }
+
+  .deck-thumb {
+    position: absolute; transform: translate(-50%, -50%); cursor: pointer; z-index: 3;
+    border-radius: 8px; overflow: hidden; transition: transform 0.12s, z-index 0s; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  .deck-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .deck-thumb:hover { transform: translate(-50%, -50%) scale(1.6); z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+  .deck-thumb .ring { position: absolute; inset: -3px; border-radius: 11px; border: 2.5px solid; pointer-events: none; }
+  .deck-thumb.selected .ring { border-width: 3.5px; box-shadow: 0 0 0 2px #fff; }
+
+  .ttip {
+    position: absolute; background: #fff; border: 0.5px solid rgba(0,0,0,0.18); border-radius: 8px;
+    padding: 8px 12px; font-size: 13px; pointer-events: none; z-index: 20; white-space: nowrap;
+    transform: translate(-50%, calc(-100% - 16px)); box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    display: none;
+  }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1rem; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #555; padding: 4px 10px; border-radius: 99px; border: 0.5px solid rgba(0,0,0,0.1); background: #f5f4f0; }
+  .dot-sm { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; border-width: 1.5px; border-style: solid; }
+
+  /* Editor panel (appears when a deck is selected) */
+  .editor { display: none; }
+  .editor.active { display: block; }
+  .editor-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .editor-thumb { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+  .editor-title { font-size: 15px; font-weight: 500; }
+  .editor-sub { font-size: 12px; color: #888; }
+  .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: end; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 13px; color: #555; }
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-val { font-size: 14px; font-weight: 500; min-width: 22px; text-align: right; }
+  .close-editor { margin-left: auto; }
+  .editor-hint { font-size: 12px; color: #999; margin-top: 10px; }
+
+  /* Deck list */
+  .deck-row { display: grid; grid-template-columns: 36px 1fr auto auto; gap: 12px; align-items: center; background: #fff; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; cursor: pointer; }
+  .deck-row:hover { border-color: rgba(0,0,0,0.25); }
+  .deck-row.selected { border-color: #378ADD; background: #f3f8fe; }
+  .deck-row img { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; }
+  .deck-name { font-size: 14px; font-weight: 500; }
+  .deck-player { font-size: 12px; color: #888; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 99px; white-space: nowrap; }
+  .power-bar-wrap { width: 70px; height: 6px; background: #eee; border-radius: 99px; overflow: hidden; }
+  .power-bar { height: 100%; border-radius: 99px; }
+  .power-col { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+  .power-txt { font-size: 12px; color: #666; }
+  .empty { text-align: center; padding: 2.5rem; color: #aaa; font-size: 14px; }
+  .img-fallback { display: flex; align-items: center; justify-content: center; background: #e5e3dc; color: #999; font-size: 10px; width: 100%; height: 100%; }
+  .edit-hint-icon { font-size: 11px; color: #aaa; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Commander Playgroup Power Tracker</h1>
+  <p class="subtitle">Decks are pulled automatically from this repo's player folders. Click any deck — anytime — to set or change the group's bracket / power consensus.</p>
+
+  <div id="status" class="status-bar"><div class="spinner"></div><span>Loading decks from repo...</span></div>
+
+  <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap: 12px;">
+    <div style="font-size:13px; color:#888;">
+      Players expected: <strong id="player-count" style="color:#1a1a18">7</strong> &nbsp;·&nbsp;
+      Decks found: <strong id="deck-count" style="color:#1a1a18">0</strong>
+    </div>
+    <button class="btn-refresh" onclick="loadDecks()"><i class="ti ti-refresh"></i>Refresh from repo</button>
+  </div>
+
+  <div class="card editor" id="editor">
+    <div class="editor-head">
+      <img id="editor-thumb" class="editor-thumb" src="" alt="" />
+      <div>
+        <div class="editor-title" id="editor-title">Deck name</div>
+        <div class="editor-sub" id="editor-sub">Player</div>
+      </div>
+      <button class="close-editor" onclick="deselectDeck()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="editor-grid">
+      <div class="field">
+        <label for="inp-bracket">Bracket</label>
+        <select id="inp-bracket" onchange="updateSelectedDeck()">
+          <option value="1">1 – Exhibition (ultra casual)</option>
+          <option value="2">2 – Core (precon-ish)</option>
+          <option value="3">3 – Upgraded (powered up)</option>
+          <option value="4">4 – Optimized (high power)</option>
+          <option value="5">5 – cEDH (competitive)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Power within bracket: <span class="slider-val" id="power-val">5</span>/10</label>
+        <div class="slider-row">
+          <input id="inp-power" type="range" min="1" max="10" value="5" step="1" oninput="updateSelectedDeck()" />
+        </div>
+      </div>
+    </div>
+    <div class="editor-hint"><i class="ti ti-info-circle edit-hint-icon"></i> Changes apply instantly. You can reopen this editor for any deck at any time to adjust it further.</div>
+  </div>
+
+  <div class="card">
+    <div class="section-label">Playgroup power map</div>
+    <div class="bracket-header">
+      <div class="b-head">Exhibition<br><span style="font-weight:400;font-size:10px;color:#aaa">Bracket 1</span></div>
+      <div class="b-head">Core<br><span style="font-weight:400;font-size:10px;color:#aaa">Bracket 2</span></div>
+      <div class="b-head">Upgraded<br><span style="font-weight:400;font-size:10px;color:#aaa">Bracket 3</span></div>
+      <div class="b-head">Optimized<br><span style="font-weight:400;font-size:10px;color:#aaa">Bracket 4</span></div>
+      <div class="b-head">cEDH<br><span style="font-weight:400;font-size:10px;color:#aaa">Bracket 5</span></div>
+    </div>
+    <div class="chart-row">
+      <div class="y-col" id="y-col"></div>
+      <div class="plot" id="plot" style="height:320px">
+        <div class="banded">
+          <div class="b-stripe" style="background:rgba(159,225,203,0.15)"></div>
+          <div class="b-stripe" style="background:rgba(181,212,244,0.15)"></div>
+          <div class="b-stripe" style="background:rgba(250,199,117,0.15)"></div>
+          <div class="b-stripe" style="background:rgba(245,196,179,0.15)"></div>
+          <div class="b-stripe" style="background:rgba(244,192,209,0.15)"></div>
+        </div>
+        <div id="dots"></div>
+        <div id="ttip" class="ttip"></div>
+      </div>
+    </div>
+    <div id="legend" class="legend"></div>
+  </div>
+
+  <div class="section-label">Deck list <span style="font-weight:400;color:#aaa;text-transform:none;font-size:11px">(click any deck to edit)</span></div>
+  <div id="deck-list"></div>
+</div>
+
+<script>
+const PLAYERS = ["James", "Ben R", "Kevin", "Michael R", "Michael J", "Ben M", "Will"];
+
+const PALETTE = [
+  {fill:'#7F77DD',border:'#3C3489'},
+  {fill:'#1D9E75',border:'#085041'},
+  {fill:'#D85A30',border:'#712B13'},
+  {fill:'#378ADD',border:'#0C447C'},
+  {fill:'#D4537E',border:'#72243E'},
+  {fill:'#BA7517',border:'#633806'},
+  {fill:'#E24B4A',border:'#791F1F'},
+];
+const BRACKET_NAMES = ['Exhibition','Core','Upgraded','Optimized','cEDH'];
+const BRACKET_BADGE_BG = ['#9FE1CB','#B5D4F4','#FAC775','#F5C4B3','#F4C0D1'];
+const BRACKET_BADGE_TX = ['#085041','#0C447C','#633806','#712B13','#72243E'];
+const IMAGE_EXT = /\.(png|jpe?g|webp|gif|avif)$/i;
+
+// In-memory store of any bracket/power edits the group has made this session,
+// keyed by stable deck id, so refreshing the deck list from GitHub doesn't
+// wipe out edits that have already been made.
+let deckEdits = {};
+
+let decks = [];
+let selectedId = null;
+let playerColorMap = {};
+
+PLAYERS.forEach((p, i) => playerColorMap[p] = PALETTE[i % PALETTE.length]);
+document.getElementById('player-count').textContent = PLAYERS.length;
+
+function folderNameFor(player) {
+  return player.trim().replace(/\s+/g, '-');
+}
+function deckNameFromFile(filename) {
+  const base = filename.replace(IMAGE_EXT, '');
+  return base.replace(/-/g, ' ');
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function detectRepo() {
+  // Standard GitHub Pages pattern: username.github.io/repo-name/...
+  const host = window.location.hostname; // e.g. "alex.github.io"
+  const path = window.location.pathname; // e.g. "/repo-name/index.html"
+  const match = host.match(/^([^.]+)\.github\.io$/i);
+  if (!match) return null;
+  const owner = match[1];
+  const segments = path.split('/').filter(Boolean);
+  // If served from a project page, first segment is the repo name.
+  // If served from a user page (owner.github.io itself, no subpath repo), fall back to repo = owner.github.io
+  const repo = segments.length > 0 && !segments[0].includes('.') ? segments[0] : `${owner}.github.io`;
+  return { owner, repo };
+}
+
+function setStatus(html, kind) {
+  const el = document.getElementById('status');
+  el.className = 'status-bar' + (kind ? ' ' + kind : '');
+  el.innerHTML = html;
+}
+
+async function loadDecks() {
+  setStatus('<div class="spinner"></div><span>Loading decks from repo...</span>');
+  const previousSelection = selectedId;
+  decks = [];
+
+  const repoInfo = detectRepo();
+  if (!repoInfo) {
+    setStatus('<i class="ti ti-alert-triangle"></i><span>Could not auto-detect repo from this URL (expected to be served at <code>username.github.io/repo-name/</code>). Open this page via GitHub Pages, or edit OWNER/REPO directly in the script.</span>', 'error');
+    render();
+    return;
+  }
+
+  const { owner, repo } = repoInfo;
+  let foundAny = false;
+  let errors = [];
+
+  for (const player of PLAYERS) {
+    const folder = folderNameFor(player);
+    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(folder)}`;
+    try {
+      const res = await fetch(apiUrl, { headers: { Accept: 'application/vnd.github.v3+json' } });
+      if (!res.ok) {
+        if (res.status === 404) {
+          errors.push(`No folder found for "${player}" (expected "${folder}")`);
+        } else {
+          errors.push(`${player}: GitHub API error ${res.status}`);
+        }
+        continue;
+      }
+      const items = await res.json();
+      if (!Array.isArray(items)) continue;
+      const imageFiles = items.filter(it => it.type === 'file' && IMAGE_EXT.test(it.name));
+      imageFiles.forEach(file => {
+        foundAny = true;
+        const id = `${folder}/${file.name}`;
+        // Apply any edit already made this session, otherwise default to Bracket 2 / Power 5
+        const existingEdit = deckEdits[id];
+        decks.push({
+          id,
+          player,
+          deckName: deckNameFromFile(file.name),
+          imageUrl: file.download_url,
+          bracket: existingEdit ? existingEdit.bracket : 2,
+          power: existingEdit ? existingEdit.power : 5,
+          color: playerColorMap[player],
+        });
+      });
+    } catch (err) {
+      errors.push(`${player}: ${err.message}`);
+    }
+  }
+
+  if (foundAny) {
+    setStatus(`<i class="ti ti-circle-check"></i><span>Loaded ${decks.length} deck${decks.length === 1 ? '' : 's'} from <strong>${owner}/${repo}</strong>.${errors.length ? ' (' + errors.length + ' folder(s) skipped — see console)' : ''}</span>`, 'ok');
+  } else {
+    setStatus(`<i class="ti ti-alert-triangle"></i><span>No decks found in <strong>${owner}/${repo}</strong>. Make sure each player has a folder (e.g. <code>${folderNameFor(PLAYERS[0])}</code>) containing deck images.</span>`, 'error');
+  }
+  if (errors.length) {
+    console.warn('Deck loading issues:', errors);
+  }
+
+  // Restore selection if that deck still exists after refresh
+  selectedId = decks.some(d => d.id === previousSelection) ? previousSelection : null;
+  if (selectedId) {
+    const deck = decks.find(d => d.id === selectedId);
+    document.getElementById('editor').classList.add('active');
+    document.getElementById('editor-thumb').src = deck.imageUrl;
+    document.getElementById('editor-title').textContent = deck.deckName;
+    document.getElementById('editor-sub').textContent = deck.player;
+    document.getElementById('inp-bracket').value = deck.bracket;
+    document.getElementById('inp-power').value = deck.power;
+    document.getElementById('power-val').textContent = deck.power;
+  } else {
+    document.getElementById('editor').classList.remove('active');
+  }
+
+  render();
+}
+
+function xPct(deck) {
+  const bw = 1 / 5;
+  const bStart = (deck.bracket - 1) * bw;
+  const inBand = ((deck.power - 1) / 9) * 0.8 + 0.1;
+  return (bStart + inBand * bw) * 100;
+}
+function yPct(playerIdx, total) {
+  if (total === 1) return 50;
+  return 10 + (playerIdx / (total - 1)) * 80;
+}
+
+// Selecting a deck always reopens the editor with that deck's CURRENT
+// (possibly already-edited) values — this is what makes every deck
+// editable repeatedly, not just at creation time.
+function selectDeck(id) {
+  selectedId = id;
+  const deck = decks.find(d => d.id === id);
+  if (!deck) return;
+  document.getElementById('editor').classList.add('active');
+  document.getElementById('editor-thumb').src = deck.imageUrl;
+  document.getElementById('editor-title').textContent = deck.deckName;
+  document.getElementById('editor-sub').textContent = deck.player;
+  document.getElementById('inp-bracket').value = deck.bracket;
+  document.getElementById('inp-power').value = deck.power;
+  document.getElementById('power-val').textContent = deck.power;
+  render();
+  document.getElementById('editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function deselectDeck() {
+  selectedId = null;
+  document.getElementById('editor').classList.remove('active');
+  render();
+}
+
+function updateSelectedDeck() {
+  const deck = decks.find(d => d.id === selectedId);
+  if (!deck) return;
+  deck.bracket = parseInt(document.getElementById('inp-bracket').value);
+  deck.power = parseInt(document.getElementById('inp-power').value);
+  document.getElementById('power-val').textContent = deck.power;
+  // Persist this edit so it survives a "Refresh from repo" click
+  deckEdits[deck.id] = { bracket: deck.bracket, power: deck.power };
+  render();
+}
+
+function render() {
+  document.getElementById('deck-count').textContent = decks.length;
+  const players = PLAYERS.filter(p => decks.some(d => d.player === p));
+
+  // Y axis
+  const yCol = document.getElementById('y-col');
+  yCol.innerHTML = '';
+  yCol.style.height = '320px';
+  players.forEach((p, i) => {
+    const pct = yPct(i, players.length);
+    const lbl = document.createElement('div');
+    lbl.className = 'y-lbl';
+    lbl.textContent = p;
+    lbl.title = p;
+    lbl.style.top = pct + '%';
+    yCol.appendChild(lbl);
+  });
+
+  // Dots / thumbnails
+  const dotsEl = document.getElementById('dots');
+  dotsEl.innerHTML = '';
+  const ttip = document.getElementById('ttip');
+  const thumbSize = 34;
+
+  decks.forEach(deck => {
+    const pi = players.indexOf(deck.player);
+    const x = xPct(deck);
+    const y = yPct(pi, players.length);
+
+    const thumb = document.createElement('div');
+    thumb.className = 'deck-thumb' + (deck.id === selectedId ? ' selected' : '');
+    thumb.style.left = x + '%';
+    thumb.style.top = y + '%';
+    thumb.style.width = thumbSize + 'px';
+    thumb.style.height = thumbSize + 'px';
+
+    const ring = document.createElement('div');
+    ring.className = 'ring';
+    ring.style.borderColor = deck.color.border;
+    thumb.appendChild(ring);
+
+    const img = document.createElement('img');
+    img.src = deck.imageUrl;
+    img.alt = deck.deckName;
+    img.loading = 'lazy';
+    img.onerror = function() {
+      thumb.innerHTML = `<div class="img-fallback">${esc(deck.deckName.slice(0,2))}</div>`;
+    };
+    thumb.appendChild(img);
+
+    thumb.addEventListener('click', () => selectDeck(deck.id));
+    thumb.addEventListener('mouseenter', () => {
+      ttip.style.display = 'block';
+      ttip.style.left = x + '%';
+      ttip.style.top = y + '%';
+      ttip.innerHTML = `<strong>${esc(deck.player)}</strong> — ${esc(deck.deckName)}<br><span style="color:#888;font-size:12px">Bracket ${deck.bracket} (${BRACKET_NAMES[deck.bracket-1]}) &nbsp;·&nbsp; Power ${deck.power}/10 &nbsp;·&nbsp; <em>click to edit</em></span>`;
+    });
+    thumb.addEventListener('mouseleave', () => { ttip.style.display = 'none'; });
+
+    dotsEl.appendChild(thumb);
+  });
+
+  // Legend
+  const legEl = document.getElementById('legend');
+  legEl.innerHTML = players.map(p => {
+    const c = playerColorMap[p];
+    return `<div class="leg-item"><div class="dot-sm" style="background:${c.fill};border-color:${c.border}"></div>${esc(p)}</div>`;
+  }).join('');
+
+  // Deck list
+  const listEl = document.getElementById('deck-list');
+  if (decks.length === 0) {
+    listEl.innerHTML = '<div class="empty">No decks loaded yet.</div>';
+    return;
+  }
+  const sorted = [...decks].sort((a,b) => (b.bracket*10+b.power) - (a.bracket*10+a.power));
+  listEl.innerHTML = sorted.map(d => {
+    const bg = BRACKET_BADGE_BG[d.bracket-1];
+    const tx = BRACKET_BADGE_TX[d.bracket-1];
+    const barW = Math.round(d.power * 10);
+    return `
+    <div class="deck-row${d.id === selectedId ? ' selected' : ''}" onclick="selectDeck('${d.id.replace(/'/g, "\\'")}')">
+      <img src="${d.imageUrl}" alt="${esc(d.deckName)}" loading="lazy" onerror="this.style.visibility='hidden'" />
+      <div>
+        <div class="deck-name">${esc(d.deckName)}</div>
+        <div class="deck-player">${esc(d.player)}</div>
+      </div>
+      <span class="badge" style="background:${bg};color:${tx}">B${d.bracket} · ${BRACKET_NAMES[d.bracket-1]}</span>
+      <div class="power-col">
+        <span class="power-txt">${d.power}/10</span>
+        <div class="power-bar-wrap"><div class="power-bar" style="width:${barW}%;background:${d.color.fill}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+loadDecks();
+</script>
+</body>
+</html>
